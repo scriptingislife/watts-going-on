@@ -3,40 +3,66 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   watts-going-on
 
-  Sample SAM Template for watts-going-on
+  SAM Template for watts-going-on
 
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Parameters:
+  Environment:
+    Type: String
+    Default: staging
+    AllowedValues:
+      - production
+      - staging
+    Description: Parameter for getting the deployment environment. Override on the command-line to deploy to production.
+  DDParamName:
+    Type: String
+    Default: DDApiKey
+    Description: Name of the parameter in AWS Systems Manager Parameter Store storing the Datadog API key.
+
 Globals:
   Function:
     Timeout: 3
     MemorySize: 128
+    Environment:
+      Variables:
+        DD_SITE: datadoghq.com
+        ENV: !Ref Environment
+        SERVICE: watts-ifttt
+        SOURCE: watts
+        VERSION: 1.0.0
 
 Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  WattsSendFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      CodeUri: hello_world/
+      CodeUri: watts/
       Handler: app.lambda_handler
       Runtime: python3.9
       Architectures:
         - x86_64
       Events:
-        HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+        WattsSend:
+          Type: Api
           Properties:
-            Path: /hello
-            Method: get
+            Path: /send
+            Method: post
+      Environment:
+        Variables:
+          DD_API_KEY_NAME: !Ref DDParamName
+      Policies:
+        - Statement:
+            - Sid: GetDDParamPolicy
+              Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Join ['/', [!Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter', !Ref DDParamName]]
 
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
-    Description: "Hello World Lambda Function ARN"
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: "Implicit IAM Role created for Hello World function"
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+  WattsSendApi:
+    Description: "API Gateway endpoint URL for Prod stage for Watts Send function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/send/"
+  WattsSendFunction:
+    Description: "Watts Send Lambda Function ARN"
+    Value: !GetAtt WattsSendFunction.Arn
+  WattsSendFunctionIamRole:
+    Description: "Implicit IAM Role created for Watts Send function"
+    Value: !GetAtt WattsSendFunctionRole.Arn
